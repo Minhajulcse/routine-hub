@@ -1,0 +1,2 @@
+Fixed production TypeScript PDF response errors: Buffer is converted to Uint8Array before passing to NextResponse in both section and teacher PDF routes.
+Also retains prior ES2017 and extraction fixes.

@@ -1,0 +1,16 @@
+V9 Theme Update
+
+Changes:
+- Set Midnight Blue as the default/primary theme.
+- Default palette: dark graphite UI with solid blue accents (no gradients).
+- Theme selector keeps 4 options:
+  1. Midnight Blue (default)
+  2. Purple Rose
+  3. Amber Dark
+  4. Charcoal Emerald
+- Old saved theme values automatically fall back to Midnight Blue.
+- Existing routine functionality and PDF generation code were kept unchanged.
+
+Run locally:
+  npm install
+  npm run dev

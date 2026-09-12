@@ -1,0 +1,3 @@
+Build fix V4:
+- Added a local TypeScript declaration for bcryptjs v2.x so strict Next.js type checking can compile lib/admin-auth.ts.
+- This keeps the existing bcryptjs runtime package unchanged.

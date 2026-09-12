@@ -1,0 +1,108 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoutineStatus {
+  DRAFT
+  REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+model Department {
+  id        String    @id @default(cuid())
+  name      String
+  code      String    @unique
+  sections  Section[]
+  courses   Course[]
+  teachers  Teacher[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Section {
+  id          String     @id @default(cuid())
+  departmentId String
+  batch       String
+  section     String
+  identifier  String     @unique
+  department  Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  schedules   Schedule[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@unique([departmentId, batch, section])
+}
+
+model Course {
+  id           String      @id @default(cuid())
+  departmentId String
+  code         String
+  name         String?
+  department   Department  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  schedules    Schedule[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@unique([departmentId, code])
+}
+
+model Teacher {
+  id           String      @id @default(cuid())
+  departmentId String
+  name         String?
+  initial      String
+  profileImage String?
+  department   Department  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  schedules    Schedule[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@unique([departmentId, initial])
+}
+
+model Room {
+  id          String     @id @default(cuid())
+  roomNumber  String     @unique
+  building    String?
+  roomType    String?
+  schedules   Schedule[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model RoutineVersion {
+  id          String        @id @default(cuid())
+  name        String
+  sourceFile  String?
+  status      RoutineStatus @default(DRAFT)
+  publishedAt DateTime?
+  schedules   Schedule[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Schedule {
+  id               String         @id @default(cuid())
+  routineVersionId String
+  courseId         String
+  sectionId        String
+  teacherId        String
+  roomId           String
+  day              String
+  startTime        String
+  endTime          String
+  routineVersion   RoutineVersion @relation(fields: [routineVersionId], references: [id], onDelete: Cascade)
+  course           Course         @relation(fields: [courseId], references: [id])
+  section          Section        @relation(fields: [sectionId], references: [id])
+  teacher          Teacher        @relation(fields: [teacherId], references: [id])
+  room             Room           @relation(fields: [roomId], references: [id])
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+}

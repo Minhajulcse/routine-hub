@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Primary theme: dark graphite with one solid blue accent per element. */
+  --bg:#1f2125; --bg-grad:#1f2125; --surface:rgba(42,46,52,.96); --surface-2:#292d33;
+  --sidebar:#25272b; --hero-1:#202329; --hero-2:#202329; --hero-3:#202329;
+  --text:#f4f6fa; --text-muted:#aab0bc; --border:rgba(255,255,255,.09);
+  --accent:#6678df; --accent-soft:#6678df; --accent-contrast:#ffffff;
+  color-scheme:dark;
+}
+:root[data-theme="purple"] { --bg:#fcf8ff; --bg-grad:#fcf8ff; --surface:rgba(255,255,255,.96); --surface-2:#ffffff; --sidebar:#2d1745; --hero-1:#34165b; --hero-2:#34165b; --hero-3:#34165b; --text:#261a31; --text-muted:#786a80; --border:rgba(58,30,82,.13); --accent:#8b3fb8; --accent-soft:#8b3fb8; --accent-contrast:#fff; color-scheme:light; }
+:root[data-theme="amber"] { --bg:#17130f; --bg-grad:#17130f; --surface:rgba(42,33,25,.96); --surface-2:#2b2119; --sidebar:#120f0c; --hero-1:#3a2512; --hero-2:#3a2512; --hero-3:#3a2512; --text:#fff8ed; --text-muted:#c6b9aa; --border:rgba(255,215,160,.14); --accent:#f2a93b; --accent-soft:#f2a93b; --accent-contrast:#26180b; color-scheme:dark; }
+:root[data-theme="charcoal"] { --bg:#151817; --bg-grad:#151817; --surface:rgba(35,41,39,.96); --surface-2:#252c2a; --sidebar:#0d100f; --hero-1:#17201d; --hero-2:#17201d; --hero-3:#17201d; --text:#f3f7f5; --text-muted:#a8b7b1; --border:rgba(220,240,232,.13); --accent:#28b889; --accent-soft:#28b889; --accent-contrast:#081510; color-scheme:dark; }
+*{box-sizing:border-box}
+html{background:var(--bg)}
+body{min-height:100vh;margin:0;background:var(--bg);color:var(--text);transition:background .3s ease,color .3s ease}
+.glass{background:var(--surface);border:1px solid var(--border);box-shadow:0 18px 45px rgba(0,0,0,.20);backdrop-filter:blur(16px)}
+/* Kept class name for existing components, but the visual is a single solid accent color. */
+.gradient{background:var(--accent);color:var(--accent-contrast);box-shadow:0 10px 24px color-mix(in srgb,var(--accent) 24%,transparent)}
+.gradient:hover{filter:brightness(1.06);transform:translateY(-1px)}
+.hero-surface{background:var(--hero-1);color:#fff}
+.theme-toggle{background:var(--surface);border:1px solid var(--border);color:var(--text);box-shadow:0 10px 30px rgba(0,0,0,.12);backdrop-filter:blur(14px)}
+.theme-menu{background:var(--surface-2);border:1px solid var(--border);color:var(--text);backdrop-filter:blur(18px)}
+.theme-option{color:var(--text)} .theme-option:hover{background:color-mix(in srgb,var(--accent) 10%,transparent)} .theme-option.active{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent-soft);font-weight:700}
+button,input,select{transition:.18s ease} button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px} input::placeholder{color:var(--text-muted)} select option{background:var(--surface-2);color:var(--text)}
+.scrollbar::-webkit-scrollbar{width:8px;height:8px}.scrollbar::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--accent) 45%,transparent);border-radius:999px}
+@media(max-width:640px){body{font-size:15px}.theme-toggle{padding:.65rem .8rem}}
+.routine-hub-logo{object-fit:cover;filter:drop-shadow(0 0 20px color-mix(in srgb,var(--accent) 25%,transparent))}
