@@ -13821,19 +13821,20 @@ export const courseNames: Record<string, string> = {
   CSE234: "Microprocessors and Microcontrollers Lab",
   CSE235: "Artificial Intelligence",
   CSE236: "Artificial Intelligence Lab",
-  CSE311: "Computer Graphics",
-  CSE312: "Computer Graphics Lab",
-  CSE313: "Data Communication",
-  CSE314: "Data Communication Lab",
-  CSE315: "Compiler Design",
-  CSE316: "Compiler Design Lab",
-  CSE317: "System Analysis and Design",
-  CSE321: "Software Development Project",
-  CSE322: "Software Development Project Lab",
-  CSE323: "Human Computer Interaction",
-  CSE324: "Human Computer Interaction Lab",
-  CSE325: "Instrumentation and Control",
+  CSE311: "Database Management System",
+  CSE312: "Database Management System Lab",
+  CSE313: "Compiler Design",
+  CSE314: "Compiler Design Lab",
+  CSE315: "Software Engineering",
+  CSE316: "Artificial Intelligence",
+  CSE317: "Software Project V",
+  CSE321: "Data Mining and Machine Learning",
+  CSE322: "Data Mining and Machine Learning Lab",
+  CSE323: "Operating Systems",
+  CSE324: "Operating Systems Lab",
+  CSE325: "System Analysis and Design",
   CSE326: "Social and Professional Issues in Computing",
+  CSE328: "Introduction to Data Science",
   CSE331: "Computer Security",
   CSE332: "Computer Security Lab",
   CSE333: "Machine Learning",
@@ -13889,8 +13890,15 @@ function cleanCourseCode(value: string) {
 
 export function fullCourseName(courseSection: string, explicitName?: string) {
   const code = cleanCourseCode(courseSection);
-  const name = String(explicitName ?? "").trim() || courseNames[code] || "";
-  return name || code || String(courseSection ?? "").trim();
+  const mapped = courseNames[code] || "";
+  const explicit = String(explicitName ?? "").trim();
+
+  // Prefer the authoritative local course-code map for known courses.
+  // Older imported database rows may contain a stale/wrong name (or even
+  // the course code itself), which must not override the correct mapping.
+  if (mapped) return mapped;
+  if (explicit && cleanCourseCode(explicit) !== code) return explicit;
+  return code || String(courseSection ?? "").trim();
 }
 
 export function displayCourseName(courseSection: string, explicitName?: string) {

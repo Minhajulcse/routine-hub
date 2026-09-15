@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: "Routine Hub",
   description: "Routine Hub - DIU section-wise routine explorer",
   manifest: "/manifest.webmanifest",
-  themeColor: "#111318"
+  themeColor: "#0a0f1d"
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -46,30 +46,30 @@ export default function VersionManager() {
   }
 
   return (
-    <section className="glass rounded-2xl p-5">
-      <div className="mb-5 flex items-center justify-between">
+    <section className="glass admin-section">
+      <div className="admin-section-title">
         <div>
           <h2 className="font-bold">Routine Version History</h2>
-          <p className="text-xs text-slate-400">Only one version can be publicly published at a time.</p>
+          <p className="text-xs text-[var(--text-muted)]">Only one version can be publicly published at a time.</p>
         </div>
-        <button onClick={load} className="rounded-lg border border-[#404653] p-2 text-slate-300"><RotateCcw size={16}/></button>
+        <button onClick={load} className="rounded-lg border border-[var(--border)] bg-white/[.03] p-2 text-[var(--text-soft)]"><RotateCcw size={16}/></button>
       </div>
 
-      {loading ? <div className="grid place-items-center p-8 text-slate-400"><Loader2 className="animate-spin"/></div>
-      : versions.length === 0 ? <div className="rounded-xl bg-black/10 p-5 text-center text-sm text-slate-400">No database versions yet. Import a reviewed routine first.</div>
+      {loading ? <div className="grid place-items-center p-8 text-[var(--text-muted)]"><Loader2 className="animate-spin"/></div>
+      : versions.length === 0 ? <div className="rounded-2xl border border-[var(--border)] bg-white/[.025] p-8 text-center text-sm text-[var(--text-muted)]">No database versions yet. Import a reviewed routine first.</div>
       : <div className="space-y-3">
         {versions.map(v => (
-          <div key={v.id} className="rounded-xl border border-[#30353d] bg-black/10 p-4 sm:flex sm:items-center sm:justify-between">
+          <div key={v.id} className="rounded-2xl border border-[var(--border)] bg-white/[.025] p-4 sm:flex sm:items-center sm:justify-between">
             <div>
               <div className="flex items-center gap-2 font-semibold">
                 {v.status==="PUBLISHED" ? <CheckCircle2 size={16} className="text-emerald-300"/> : v.status==="ARCHIVED" ? <Archive size={16} className="text-slate-500"/> : <Clock3 size={16} className="text-amber-300"/>}
                 {v.name}
               </div>
-              <div className="mt-1 text-xs text-slate-400">{v._count.schedules} classes • {v.status}</div>
+              <div className="mt-1 text-xs text-[var(--text-muted)]">{v._count.schedules} classes • {v.status}</div>
             </div>
             <div className="mt-3 sm:mt-0">
               {v.status === "PUBLISHED"
-                ? <button disabled={working===v.id} onClick={()=>action(v.id,"unpublish")} className="rounded-lg border border-[#4b5260] px-4 py-2 text-xs text-slate-300">Unpublish</button>
+                ? <button disabled={working===v.id} onClick={()=>action(v.id,"unpublish")} className="rounded-lg border border-[var(--border)] px-4 py-2 text-xs text-[var(--text-soft)]">Unpublish</button>
                 : <button disabled={working===v.id} onClick={()=>action(v.id,"publish")} className="gradient flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold"><Rocket size={14}/> {working===v.id ? "Working..." : "Publish"}</button>
               }
             </div>

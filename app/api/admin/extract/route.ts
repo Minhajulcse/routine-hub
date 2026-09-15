@@ -87,37 +87,82 @@ function slotAt(position: number, columns: number[]) {
  */
 async function renderLayout(pageData: any) {
   const content = await pageData.getTextContent({ normalizeWhitespace: false, disableCombineTextItems: false });
-  const rows = new Map<number, Array<{ x: number; text: string }>>();
+  const rawItems = (content.items as any[])
+    .map(item => ({
+      x: Number(item.transform?.[4] ?? 0),
+      y: Number(item.transform?.[5] ?? 0),
+      text: String(item.str ?? ""),
+    }))
+    .filter(item => item.text.length > 0);
 
-  for (const item of content.items as any[]) {
-    const text = String(item.str ?? "");
-    if (!text) continue;
-    const x = Number(item.transform?.[4] ?? 0);
-    const y = Number(item.transform?.[5] ?? 0);
-    // A small bucket groups fragments that visually belong to the same row.
-    const key = Math.round(y / 2) * 2;
+  const rows = new Map<number, Array<{ x: number; text: string }>>();
+  for (const item of rawItems) {
+    const key = Math.round(item.y / 2) * 2;
     const list = rows.get(key) ?? [];
-    list.push({ x, text });
+    list.push({ x: item.x, text: item.text });
     rows.set(key, list);
   }
 
-  return Array.from(rows.entries())
+  const rowData = Array.from(rows.entries())
     .sort((a, b) => b[0] - a[0])
-    .map(([, items]) => {
-      items.sort((a, b) => a.x - b.x);
-      let line = "";
-      let cursor = 0;
-      for (const item of items) {
-        // ~2 PDF points per pdftotext layout character keeps the six 49-char slots aligned.
-        const col = Math.max(0, Math.round(item.x / 2.0));
-        if (col > cursor) line += " ".repeat(col - cursor);
-        else if (line && !line.endsWith(" ")) line += " ";
-        line += item.text;
-        cursor = Math.max(cursor, col + item.text.length);
-      }
-      return line.replace(/\s+$/g, "");
-    })
-    .join("\n");
+    .map(([y, items]) => ({ y, items: items.sort((a, b) => a.x - b.x) }));
+
+  // The PDF uses six repeated timetable columns, but their absolute PDF x
+  // coordinates can move slightly between pages. Instead of assuming a fixed
+  // pixels->character scale, detect the six time headers on THIS page and map
+  // their actual x coordinates to logical slots 0..5. This prevents later-day
+  // columns (especially Tuesday/Wednesday) from drifting into the wrong slot.
+  let anchors: number[] | null = null;
+  for (const row of rowData) {
+    const found = row.items
+      .filter(item => TIMES.includes(item.text.replace(/[–—]/g, "-")))
+      .map(item => item.x);
+    if (found.length === TIMES.length) {
+      anchors = found;
+      break;
+    }
+  }
+
+  const fallbackAnchor = anchors?.[0] ?? 0;
+  const fallbackGap = anchors && anchors.length > 1
+    ? anchors.slice(1).reduce((sum, x, i) => sum + (x - anchors![i]), 0) / (anchors.length - 1)
+    : 100;
+
+  function charColumn(x: number) {
+    if (!anchors || anchors.length !== TIMES.length) {
+      // Conservative fallback for unusual PDFs. The parser will still detect
+      // the time header if present, but we avoid the old hard-coded /2 scale.
+      return Math.max(0, Math.round((x - fallbackAnchor) / fallbackGap * 50));
+    }
+
+    // Piecewise mapping handles tiny non-linear spacing differences between
+    // columns while preserving a clean 50-character logical slot width.
+    if (x <= anchors[0]) return 0;
+    if (x >= anchors[anchors.length - 1]) {
+      const last = anchors.length - 1;
+      return last * 50 + Math.round((x - anchors[last]) / fallbackGap * 50);
+    }
+
+    let i = 0;
+    while (i + 1 < anchors.length && x > anchors[i + 1]) i++;
+    const left = anchors[i];
+    const right = anchors[i + 1];
+    const fraction = right === left ? 0 : (x - left) / (right - left);
+    return Math.round((i + fraction) * 50);
+  }
+
+  return rowData.map(row => {
+    let line = "";
+    let cursor = 0;
+    for (const item of row.items) {
+      const col = charColumn(item.x);
+      if (col > cursor) line += " ".repeat(col - cursor);
+      else if (line && !line.endsWith(" ")) line += " ";
+      line += item.text;
+      cursor = Math.max(cursor, col + item.text.length);
+    }
+    return line.replace(/\s+$/g, "");
+  }).join("\n");
 }
 
 function parseLayout(text: string) {

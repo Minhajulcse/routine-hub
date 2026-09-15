@@ -1,0 +1,1 @@
+V6 fix: teacher week results are now explicitly grouped by normalized day and sorted by day order then start time. This prevents the old global-time order (Sunday, Monday, Tuesday, ... then Sunday again). Student/room day filtering also tolerates whitespace/casing in day values. Section suggestions remain fully scrollable.

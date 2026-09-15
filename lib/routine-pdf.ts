@@ -21,49 +21,70 @@ function dayIndex(day: string) {
   return i === -1 ? 99 : i;
 }
 
-// Handles 08:30-10:00, 8:30 AM-10:00 AM, 01:00-04:00, etc.
+function timeRange(value: string) {
+  const raw = clean(value);
+  const parts = raw.split(/\s*(?:-|–|—|to)\s*/i).filter(Boolean);
+  if (parts.length < 2) return null;
+
+  const parseClock = (part: string) => {
+    const m = part.toUpperCase().match(/^(\d{1,2})\s*[:.]\s*(\d{2})\s*(AM|PM)?$/);
+    if (!m) return null;
+    let hour = Number(m[1]);
+    const minute = Number(m[2]);
+    const suffix = m[3];
+    if (suffix === "PM" && hour < 12) hour += 12;
+    else if (suffix === "AM" && hour === 12) hour = 0;
+    else if (!suffix && hour >= 1 && hour <= 4) hour += 12;
+    return hour * 60 + minute;
+  };
+
+  const start = parseClock(parts[0]);
+  let end = parseClock(parts[1]);
+  if (start == null || end == null) return null;
+  while (end <= start) end += 12 * 60;
+  return { start, end, raw };
+}
+
 function timeKey(value: string) {
   return routineTimeKey(value);
 }
 
 function displayCourse(value: string, explicitName?: string) {
-  // Always show the human-readable course name first, followed by the exact code + section.
   return displayCourseName(value, explicitName);
 }
 
 function groupEntries(entries: Entry[]) {
-  // Sort first so two consecutive source slots are adjacent even if the extractor
-  // returned them out of order, then collapse continuous LAB slots.
-  const sourceSorted = [...entries].sort((a, b) => {
-    const d = dayIndex(a.day) - dayIndex(b.day);
-    if (d) return d;
-    const t = timeKey(a.time) - timeKey(b.time);
-    if (t) return t;
-    return clean(a.courseSection).localeCompare(clean(b.courseSection));
-  });
-  const sorted = mergeConsecutiveLabEntries(sourceSorted);
+  const sorted = mergeConsecutiveLabEntries(
+    [...entries].sort((a, b) => {
+      const d = dayIndex(a.day) - dayIndex(b.day);
+      if (d) return d;
+      const t = timeKey(a.time) - timeKey(b.time);
+      if (t) return t;
+      return clean(a.courseSection).localeCompare(clean(b.courseSection));
+    }),
+  );
 
   const groups: { day: string; entries: Entry[] }[] = [];
   for (const entry of sorted) {
     const day = clean(entry.day) || "Unknown";
-    let g = groups.find((x) => x.day.toLowerCase() === day.toLowerCase());
-    if (!g) {
-      g = { day, entries: [] };
-      groups.push(g);
+    let group = groups.find((item) => item.day.toLowerCase() === day.toLowerCase());
+    if (!group) {
+      group = { day, entries: [] };
+      groups.push(group);
     }
-    g.entries.push(entry);
+    group.entries.push(entry);
   }
   return groups;
 }
 
-function displaySourceVersion(name: string) {
-  const value = clean(name);
-  const match = value.match(/\bversion\s+(.+)$/i);
-  if (match) return match[1].trim();
-  // Backward compatibility for old database entries.
-  const direct = value.match(/\b(v?\d+(?:\.\d+)*(?:[a-z])?)\b/i);
-  return direct ? direct[1].toUpperCase() : value;
+function formatDuration(minutes: number) {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h && m) return `${h}h ${m}m`;
+  if (h) return `${h}h`;
+  return `${m}m`;
 }
+
 
 export async function buildRoutinePdf(opts: {
   title: string;
@@ -73,16 +94,17 @@ export async function buildRoutinePdf(opts: {
   filename: string;
   teacherMode?: boolean;
 }) {
-  // Collapse consecutive duplicate lab slots before measuring the single-page table.
   const groups = groupEntries(opts.entries);
+  const totalClasses = groups.reduce((sum, group) => sum + group.entries.length, 0);
   const chunks: Buffer[] = [];
 
-  // Landscape A4 gives enough width for the exact 5-column timetable.
+  // Keep the reference template: clean A4 landscape, one page, strong blue table.
   const doc = new PDFDocument({
     size: "A4",
     layout: "landscape",
     margin: 0,
-    info: { Title: opts.title, Author: "Routine Hub" },
+    info: { Title: `${opts.title} - ${opts.subject}`, Author: "Routine Hub" },
+    bufferPages: false,
   });
 
   doc.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
@@ -93,168 +115,202 @@ export async function buildRoutinePdf(opts: {
 
   const W = 841.89;
   const H = 595.28;
-  const left = 32;
-  const right = W - 32;
+  const left = 58;
+  const right = W - 58;
   const contentW = right - left;
 
   const C = {
-    navy: "#163B73",
-    blue: "#2457A6",
-    blue2: "#1B4B8C",
-    ink: "#202936",
-    muted: "#687385",
-    line: "#2B3A4E",
-    lightLine: "#B7C1CF",
-    soft: "#F4F7FB",
+    blue: "#0A16F5",
+    blueDark: "#0E2F70",
+    text: "#101828",
+    muted: "#52606D",
+    line: "#1F2937",
+    softLine: "#8F9AAA",
+    zebra: "#F3F6FA",
+    softBlue: "#EAF0FF",
     white: "#FFFFFF",
   };
 
-  // Day | Course | Time Slot | Room | Teacher
-  const widths = [92, 370, 112, 102, contentW - 92 - 370 - 112 - 102];
-  const labels = ["Day", "Course", "Time Slot", "Room", "Teacher"];
+  const logoPath = path.join(process.cwd(), "public", "pdf-diu-logo.png");
+  const qrPath = path.join(process.cwd(), "public", "pdf-generator-qr.png");
 
-  // ---------- Compact, single-page header ----------
-  doc.rect(0, 0, W, 7).fill(C.navy);
-
-  // Routine Hub official logo. The PDF renderer needs a local PNG/JPEG file,
-  // so we ship a PNG copy of the website logo inside /public and embed it directly.
-  const logoPath = path.join(process.cwd(), "public", "routine-hub-logo.png");
-  const logoSize = 58;
+  // Header assets follow the user's reference: DIU branding on the left, QR on the right.
   if (fs.existsSync(logoPath)) {
-    doc.image(logoPath, left, 29, { fit: [logoSize, logoSize] });
-  } else {
-    // Safe fallback if the logo asset is accidentally removed in a deployment.
-    doc.roundedRect(left, 34, 46, 46, 10).fill(C.navy);
-    doc.fillColor(C.white).font("Helvetica-Bold").fontSize(15)
-      .text("RH", left, 49, { width: 46, align: "center" });
-  }
-  doc.fillColor(C.navy).font("Helvetica-Bold").fontSize(20)
-    .text("ROUTINE", left + 68, 37);
-  doc.fillColor(C.blue).font("Helvetica-Bold").fontSize(20)
-    .text("HUB", left + 68, 60);
-  doc.fillColor(C.muted).font("Helvetica").fontSize(6.8)
-    .text("Smart Class Schedule System", left + 68, 83);
-
-  doc.fillColor(C.muted).font("Helvetica").fontSize(7.2)
-    .text("Generated By", right - 105, 20, { width: 105, align: "right" });
-  doc.roundedRect(right - 68, 34, 68, 45, 8).lineWidth(1).strokeColor(C.lightLine).stroke();
-  doc.fillColor(C.navy).font("Helvetica-Bold").fontSize(10)
-    .text("Routine", right - 68, 47, { width: 68, align: "center" });
-  doc.fillColor(C.blue).font("Helvetica-Bold").fontSize(10)
-    .text("Hub", right - 68, 61, { width: 68, align: "center" });
-  const sourceVersion = displaySourceVersion(opts.version?.name || "");
-  doc.fillColor(C.muted).font("Helvetica").fontSize(6.8)
-    .text(`Version ${sourceVersion}`, right - 88, 84, { width: 88, align: "right" });
-
-  doc.fillColor(C.ink).font("Helvetica-Bold").fontSize(21)
-    .text(opts.title, left, 102, { width: contentW, align: "center" });
-  doc.fillColor(C.blue).font("Helvetica-Bold").fontSize(13)
-    .text(clean(opts.subject), left, 132, { width: contentW, align: "center" });
-
-  doc.moveTo(left, 157).lineTo(right, 157).lineWidth(1).strokeColor(C.blue2).stroke();
-
-  const tableTop = 170;
-  const headerH = 28;
-  const footerY = H - 34;
-
-  // Determine a compact row height that guarantees one PDF page.
-  const totalEntries = Math.max(1, groups.reduce((n, g) => n + g.entries.length, 0));
-  const availableRowsH = footerY - (tableTop + headerH) - 8;
-  let baseRowH = Math.floor(availableRowsH / totalEntries);
-  baseRowH = Math.max(15, Math.min(26, baseRowH));
-
-  // If there are many entries, reduce font size but keep every class on one page.
-  const fontSize = baseRowH <= 16 ? 6.5 : baseRowH <= 18 ? 7 : 8;
-  const headerFont = baseRowH <= 16 ? 8 : 9;
-
-  function rowHeightFor(e: Entry) {
-    const course = displayCourse(e.courseSection, e.courseName) || "—";
-    const courseH = doc.font("Helvetica").fontSize(fontSize)
-      .heightOfString(course, { width: widths[1] - 12, lineGap: 0 });
-    const roomH = doc.font("Helvetica").fontSize(fontSize)
-      .heightOfString(clean(e.room) || "—", { width: widths[3] - 10, align: "center", lineGap: 0 });
-    return Math.max(baseRowH, Math.ceil(Math.max(courseH, roomH) + 7));
+    doc.image(logoPath, left + 8, 34, { fit: [248, 82] });
   }
 
-  // First calculate all natural row heights, then proportionally compress if needed.
-  const measured = groups.map((g) => g.entries.map(rowHeightFor));
-  const naturalTotal = measured.flat().reduce((a, b) => a + b, 0);
-  const maxTotal = footerY - (tableTop + headerH) - 8;
-  const scale = naturalTotal > maxTotal ? maxTotal / naturalTotal : 1;
-  const rowHeights = measured.map((rows) => rows.map((h) => Math.max(14, Math.floor(h * scale))));
-
-  // ---------- 5-column table ----------
-  let y = tableTop;
-  doc.rect(left, y, contentW, headerH).fill(C.navy);
-  let hx = left;
-  for (let i = 0; i < widths.length; i++) {
-    doc.strokeColor(C.white).lineWidth(0.55).rect(hx, y, widths[i], headerH).stroke();
-    doc.fillColor(C.white).font("Helvetica-Bold").fontSize(headerFont)
-      .text(labels[i], hx + 4, y + 8, { width: widths[i] - 8, align: "center" });
-    hx += widths[i];
+  doc.fillColor(C.text).font("Times-Roman").fontSize(7.6)
+    .text("Generated By", right - 82, 30, { width: 82, align: "center" });
+  if (fs.existsSync(qrPath)) {
+    doc.image(qrPath, right - 82, 48, { fit: [74, 74] });
   }
-  y += headerH;
+  doc.fillColor(C.text).font("Times-Roman").fontSize(7.5)
+    .text("Routine Hub", right - 92, 124, { width: 92, align: "center" });
 
-  groups.forEach((group, gi) => {
-    const rows = group.entries;
-    const heights = rowHeights[gi];
-    const groupH = heights.reduce((a, b) => a + b, 0);
+  const sourceVersion = clean(opts.version?.name || "");
+  const versionMatch = sourceVersion.match(/\bversion\s+(.+)$/i);
+  const version = versionMatch ? versionMatch[1].trim() : (sourceVersion.match(/\bv?\d+(?:\.\d+)*(?:[a-z])?\b/i)?.[0] ?? sourceVersion);
+  doc.fillColor(C.muted).font("Times-Roman").fontSize(7)
+    .text(version ? version.toUpperCase() : "1.1", right - 70, 156, { width: 70, align: "right" });
 
-    // Merged Day cell spanning every class sub-row for that day.
-    doc.rect(left, y, widths[0], groupH).fill(gi % 2 ? C.soft : C.white);
-    doc.strokeColor(C.line).lineWidth(0.7).rect(left, y, widths[0], groupH).stroke();
-    const dayTextY = y + Math.max(4, (groupH - 11) / 2);
-    doc.fillColor(C.ink).font("Helvetica-Bold").fontSize(fontSize + 0.6)
-      .text(group.day, left + 4, dayTextY, { width: widths[0] - 8, align: "center" });
+  doc.fillColor(C.text).font("Times-Bold").fontSize(20)
+    .text(`Class Schedule : ${clean(opts.subject)}`, left, 166, { width: contentW, align: "center" });
+
+  const labels = ["Day", "Course", "Time Slot", "Room", "Teacher"];
+  const tableTop = 214;
+  const headerH = 26;
+  const tableBottom = 520;
+  const footerY = 548;
+
+  // Table layout: size each column from the actual content so the Course column
+  // does not keep an oversized empty area. The whole table is centered.
+  const allEntries = groups.flatMap((group) => group.entries);
+  const headerFont = 14.2;
+  const tableFont = 9.6;
+  const cellPad = 12;
+
+  const measure = (text: string, size: number, font = "Times-Bold") => {
+    doc.font(font).fontSize(size);
+    return doc.widthOfString(clean(text));
+  };
+
+  const maxDayW = Math.max(
+    measure("Day", headerFont),
+    ...groups.map((g) => measure(g.day, tableFont + 0.4)),
+  );
+  const maxCourseW = Math.max(
+    measure("Course", headerFont),
+    ...allEntries.map((entry) => measure(displayCourse(entry.courseSection, entry.courseName) || "—", tableFont)),
+  );
+  const maxTimeW = Math.max(
+    measure("Time Slot", headerFont),
+    ...allEntries.map((entry) => measure(clean(entry.time) || "—", tableFont)),
+  );
+  const maxRoomW = Math.max(
+    measure("Room", headerFont),
+    ...allEntries.map((entry) => measure(clean(entry.room) || "—", tableFont)),
+  );
+  const maxTeacherW = Math.max(
+    measure("Teacher", headerFont),
+    ...allEntries.map((entry) => measure(clean(entry.teacher) || "—", tableFont)),
+  );
+
+  const rawWidths = [
+    maxDayW + cellPad,
+    maxCourseW + cellPad,
+    maxTimeW + cellPad,
+    maxRoomW + cellPad,
+    maxTeacherW + cellPad,
+  ];
+
+  let widths = rawWidths.slice();
+  let tableW = widths.reduce((a, b) => a + b, 0);
+
+  // Keep columns tightly sized to their widest content. If the combined
+  // content width is larger than the printable area, scale the columns down
+  // proportionally so the table still fits on one landscape page.
+  if (tableW > contentW) {
+    const scale = contentW / tableW;
+    widths = widths.map((w) => w * scale);
+    tableW = contentW;
+  }
+
+  // Center the compact content-sized table.
+  const tableLeft = left + (contentW - tableW) / 2;
+  const tableRight = tableLeft + tableW;
+
+  const blocks = groups.map((group) => ({
+    group,
+    rows: group.entries.map((entry) => ({ kind: "class" as const, entry })),
+  }));
+
+  const totalRows = Math.max(1, blocks.reduce((sum, block) => sum + block.rows.length, 0));
+  const availableH = Math.max(120, tableBottom - (tableTop + headerH));
+  const rowH = Math.min(24, Math.max(9.5, availableH / totalRows));
+  const bodyFont = rowH < 16 ? 7.8 : rowH < 18 ? 8.6 : 9.4;
+  const metaFont = Math.max(7.6, bodyFont - 0.3);
+
+  // Header row
+  let x = tableLeft;
+  doc.rect(tableLeft, tableTop, tableW, headerH).fill(C.blue);
+  labels.forEach((label, i) => {
+    doc.rect(x, tableTop, widths[i], headerH).lineWidth(0.55).strokeColor(C.white).stroke();
+    doc.fillColor(C.white).font("Times-Bold").fontSize(headerFont)
+      .text(label, x + 4, tableTop + 5, { width: widths[i] - 8, align: "center", lineBreak: false });
+    x += widths[i];
+  });
+
+  const bodyTop = tableTop + headerH;
+  let y = bodyTop;
+
+  blocks.forEach((block, blockIndex) => {
+    const groupH = block.rows.length * rowH;
+    const dayFill = blockIndex % 2 === 0 ? C.white : C.zebra;
+
+    // Merged day cell.
+    doc.rect(tableLeft, y, widths[0], groupH).fill(dayFill);
+    doc.rect(tableLeft, y, widths[0], groupH).lineWidth(0.6).strokeColor(C.line).stroke();
+    doc.fillColor(C.text).font("Times-Bold").fontSize(Math.max(8.2, Math.min(10.5, bodyFont + 1)))
+      .text(block.group.day, tableLeft + 4, y + Math.max(4, groupH / 2 - 5), {
+        width: widths[0] - 8,
+        align: "center",
+        lineBreak: false,
+      });
 
     let rowY = y;
-    rows.forEach((entry, ri) => {
-      const h = heights[ri];
-      const values = [
-        displayCourse(entry.courseSection, entry.courseName) || "—",
-        clean(entry.time) || "—",
-        clean(entry.room) || "—",
-        clean(entry.teacher) || "—",
+    block.rows.forEach((row, rowIndex) => {
+      const baseFill = rowIndex % 2 === 0 ? C.white : C.zebra;
+      const columnsX = [
+        tableLeft + widths[0],
+        tableLeft + widths[0] + widths[1],
+        tableLeft + widths[0] + widths[1] + widths[2],
+        tableLeft + widths[0] + widths[1] + widths[2] + widths[3],
       ];
-      let x = left + widths[0];
 
-      for (let col = 1; col < 5; col++) {
-        const w = widths[col];
-        doc.rect(x, rowY, w, h).fill(gi % 2 ? "#FBFCFE" : C.white);
-        doc.strokeColor(C.lightLine).lineWidth(0.45).rect(x, rowY, w, h).stroke();
+      const values = [
+        displayCourse(row.entry.courseSection, row.entry.courseName) || "—",
+        clean(row.entry.time) || "—",
+        clean(row.entry.room) || "—",
+        clean(row.entry.teacher) || "—",
+      ];
 
-        const center = col !== 1;
+      for (let col = 1; col <= 4; col += 1) {
+        const cellX = columnsX[col - 1];
+        const cellW = widths[col];
+        doc.rect(cellX, rowY, cellW, rowH).fill(baseFill);
+        doc.rect(cellX, rowY, cellW, rowH).lineWidth(0.4).strokeColor(C.softLine).stroke();
+        const align = col === 1 ? "left" : "center";
+        const size = col === 1 ? bodyFont : metaFont;
         const value = values[col - 1];
-        const valueFont = col === 1 ? fontSize : Math.max(6.3, fontSize - 0.2);
-        const textH = doc.font(col === 1 ? "Helvetica" : "Helvetica-Bold").fontSize(valueFont)
-          .heightOfString(value, { width: w - 10, align: center ? "center" : "left", lineGap: 0 });
-        doc.fillColor(col === 4 ? C.blue2 : C.ink)
-          .font(col === 1 ? "Helvetica" : "Helvetica-Bold")
-          .fontSize(valueFont)
-          .text(value, x + 5, rowY + Math.max(3, (h - textH) / 2), {
-            width: w - 10,
-            align: center ? "center" : "left",
-            lineGap: 0,
+        // All table text is Times New Roman-style bold for visual consistency.
+        doc.fillColor(col === 4 ? C.blueDark : C.text).font("Times-Bold").fontSize(size)
+          .text(value, cellX + 4, rowY + Math.max(2.5, rowH / 2 - size * 0.44), {
+            width: Math.max(1, cellW - 8),
+            align,
+            lineBreak: false,
+            ellipsis: true,
           });
-        x += w;
       }
-      rowY += h;
+      rowY += rowH;
     });
 
-    // Strong separator after each day group, matching the requested grouped-row style.
-    doc.moveTo(left, y + groupH).lineTo(right, y + groupH)
+    doc.moveTo(tableLeft, y + groupH).lineTo(tableRight, y + groupH)
       .lineWidth(0.9).strokeColor(C.line).stroke();
     y += groupH;
   });
 
-  // Footer stays on the same single page.
-  doc.moveTo(left, footerY - 7).lineTo(right, footerY - 7).lineWidth(0.9).strokeColor(C.blue2).stroke();
-  doc.fillColor(C.muted).font("Helvetica").fontSize(6.8)
-    .text(`Generated On: ${new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}`, left, footerY + 5);
-  doc.fillColor(C.navy).font("Helvetica-Bold").fontSize(6.8)
-    .text("Routine Hub System", left, footerY + 5, { width: contentW, align: "center" });
-  doc.fillColor(C.muted).font("Helvetica").fontSize(6.8)
-    .text("Page 1 of 1", right - 75, footerY + 5, { width: 75, align: "right" });
+  // Strong outside border with compact, professional grid.
+  const actualTableH = y - tableTop;
+  doc.lineWidth(0.85).strokeColor(C.line).rect(tableLeft, tableTop, tableW, actualTableH).stroke();
+
+  // Footer: quiet and similar to the reference style.
+  const generated = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  doc.fillColor(C.muted).font("Times-Roman").fontSize(6.7)
+    .text(`Generated On: ${generated}`, left, footerY + 9);
+  doc.fillColor(C.text).font("Times-Roman").fontSize(6.7)
+    .text(`${totalClasses} classes`, left, footerY + 9, { width: contentW, align: "center" });
+  doc.fillColor(C.muted).font("Times-Roman").fontSize(6.7)
+    .text("Page 1 of 1", right - 70, footerY + 9, { width: 70, align: "right" });
 
   doc.end();
   return { buffer: await done, filename: opts.filename };

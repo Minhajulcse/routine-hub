@@ -1,69 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { LockKeyhole, Mail, LogIn, Loader2 } from "lucide-react";
+import { LockKeyhole, Mail, LogIn, Loader2, ShieldCheck } from "lucide-react";
 
 export default function AdminLoginPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
+  const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false); const [error, setError] = useState("");
   async function login(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-
-    const res = await fetch("/api/admin/login", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({email,password})
-    });
-
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data.error || "Login failed.");
-      setLoading(false);
-      return;
-    }
-
-    window.location.href = "/admin";
+    e.preventDefault(); setLoading(true); setError("");
+    const res=await fetch("/api/admin/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password})});
+    if(!res.ok){const data=await res.json();setError(data.error||"Login failed.");setLoading(false);return;}
+    window.location.href="/admin";
   }
-
-  return (
-    <main className="grid min-h-screen place-items-center p-5">
-      <form onSubmit={login} className="glass w-full max-w-md rounded-3xl p-7">
-        <div className="mb-7 text-center">
-          <img src="/routine-hub-logo.webp" alt="Routine Hub logo" className="mx-auto mb-4 h-24 w-24 rounded-full object-cover shadow-[0_0_30px_rgba(54,210,210,0.18)]" />
-          <h1 className="text-2xl font-black">Admin Login</h1>
-          <p className="mt-2 text-sm text-slate-400">Routine Hub administration</p>
-        </div>
-
-        <label className="mb-4 block text-sm">
-          <span className="mb-2 block text-slate-400">Admin Email</span>
-          <div className="flex items-center gap-3 rounded-xl border border-[#30353d] bg-black/10 px-4 py-3">
-            <Mail size={18} className="text-slate-500"/>
-            <input required type="email" value={email} onChange={e=>setEmail(e.target.value)}
-              className="w-full bg-transparent outline-none" placeholder="admin@example.com"/>
-          </div>
-        </label>
-
-        <label className="block text-sm">
-          <span className="mb-2 block text-slate-400">Password</span>
-          <div className="flex items-center gap-3 rounded-xl border border-[#30353d] bg-black/10 px-4 py-3">
-            <LockKeyhole size={18} className="text-slate-500"/>
-            <input required type="password" value={password} onChange={e=>setPassword(e.target.value)}
-              className="w-full bg-transparent outline-none" placeholder="••••••••"/>
-          </div>
-        </label>
-
-        {error && <div className="mt-4 rounded-xl bg-red-500/10 p-3 text-sm text-red-300">{error}</div>}
-
-        <button disabled={loading} className="gradient mt-6 flex w-full items-center justify-center gap-2 rounded-xl py-3 font-bold disabled:opacity-50">
-          {loading ? <Loader2 className="animate-spin" size={18}/> : <LogIn size={18}/>}
-          {loading ? "Signing in..." : "Sign In"}
-        </button>
+  return <main className="grid min-h-screen place-items-center px-4 py-8">
+    <div className="w-full max-w-md">
+      <div className="mb-5 text-center"><div className="eyebrow mx-auto w-fit"><ShieldCheck size={13}/> SECURE ADMIN AREA</div></div>
+      <form onSubmit={login} className="glass form-shell mx-auto">
+        <div className="mb-7 text-center"><img src="/routine-hub-logo.webp" alt="Routine Hub logo" className="routine-hub-logo mx-auto mb-4 h-20 w-20 rounded-2xl object-cover"/><h1 className="text-2xl font-black">Welcome back</h1><p className="mt-2 text-sm text-[var(--text-muted)]">Sign in to manage Routine Hub.</p></div>
+        <div className="form-field"><label>ADMIN EMAIL</label><div className="form-control"><Mail size={17} className="text-[var(--text-muted)]"/><input required type="email" value={email} onChange={e=>setEmail(e.target.value)} className="w-full bg-transparent outline-none text-sm" placeholder="admin@example.com"/></div></div>
+        <div className="form-field"><label>PASSWORD</label><div className="form-control"><LockKeyhole size={17} className="text-[var(--text-muted)]"/><input required type="password" value={password} onChange={e=>setPassword(e.target.value)} className="w-full bg-transparent outline-none text-sm" placeholder="••••••••"/></div></div>
+        {error&&<div className="mt-3 rounded-xl border border-rose-400/15 bg-rose-400/10 p-3 text-sm text-rose-300">{error}</div>}
+        <button disabled={loading} className="gradient mt-5 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold disabled:opacity-50">{loading?<><Loader2 className="animate-spin" size={17}/> Signing in…</>:<><LogIn size={17}/> Sign in</>}</button>
       </form>
-    </main>
-  );
+      <p className="mt-4 text-center text-[11px] text-[var(--text-muted)]">Routine Hub · Academic schedule management</p>
+    </div>
+  </main>;
 }
