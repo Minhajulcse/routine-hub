@@ -1,0 +1,1 @@
+V24 build fix: refactored the result useMemo so teacher/room modes return before student filtering, avoiding TypeScript control-flow narrowing that caused TS2367 on Vercel. Student mode now explicitly handles only the student branch.
