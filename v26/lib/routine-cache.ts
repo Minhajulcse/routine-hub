@@ -1,7 +1,5 @@
 const DB_NAME = "routine-hub-cache";
 const STORE_NAME = "routine";
-const CACHE_TTL = 6 * 60 * 60 * 1000; // Revalidate at most once every 6 hours.
-
 export type CachedRoutine = {
   entries: any[];
   version: any;
@@ -58,9 +56,6 @@ export async function setCachedRoutine(
   }
 }
 
-export function isCacheFresh(cached: CachedRoutine | null) {
-  return !!cached && Date.now() - cached.cachedAt < CACHE_TTL;
-}
 
 export function cacheKey(version?: string) {
   return version || "latest";

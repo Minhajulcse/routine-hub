@@ -7,7 +7,7 @@ import {
   WifiOff, Sparkles, CheckCircle2
 } from "lucide-react";
 import { mergeConsecutiveLabEntries, routineTimeKey } from "../lib/routine-merge";
-import { cacheKey, getCachedRoutine, isCacheFresh, setCachedRoutine } from "../lib/routine-cache";
+import { cacheKey, getCachedRoutine, setCachedRoutine } from "../lib/routine-cache";
 
 type Entry = {day:string;time:string;room:string;courseSection:string;courseName?:string;teacher:string};
 type Mode = "student"|"teacher"|"room"|"empty";
@@ -44,26 +44,64 @@ export default function PublicRoutineApp() {
 
   function changeTheme(next:string){ setTheme(next); document.documentElement.dataset.theme=next; localStorage.setItem("routine-hub-theme",next); setThemeMenu(false); }
 
-  async function fetchRoutine(version?:string, silent=false) {
+  /**
+   * Device-first routine loading:
+   * - First visit with no local snapshot: fetch the full routine once online.
+   * - Once a snapshot exists, reads come entirely from IndexedDB on every refresh.
+   * - Network is used again only when the user explicitly presses Refresh or
+   *   requests a routine version that is not already cached on this device.
+   */
+  async function fetchRoutine(version?:string, forceNetwork=false) {
     const key=cacheKey(version);
     const cached=await getCachedRoutine(key);
-    if(cached){ setData({entries:cached.entries,version:cached.version,versions:cached.versions}); setLoading(false); }
-    else if(!silent) setLoading(true);
-    if(!version && cached && isCacheFresh(cached) && !silent) return;
-    if(!navigator.onLine){ setOffline(true); if(!cached) setLoading(false); return; }
+
+    if(cached){
+      setData({entries:cached.entries,version:cached.version,versions:cached.versions});
+      setOffline(!navigator.onLine);
+      setLoading(false);
+      if(!forceNetwork) return;
+    } else if(!forceNetwork && !navigator.onLine){
+      setOffline(true);
+      setLoading(false);
+      return;
+    } else {
+      setLoading(true);
+    }
+
+    if(!navigator.onLine){
+      setOffline(true);
+      if(!cached) setData({entries:[],version:null,versions:[]});
+      setLoading(false);
+      return;
+    }
+
     try {
       const res=await fetch(`/api/public/routine${version?`?version=${encodeURIComponent(version)}`:""}`,{cache:"no-store"});
       if(!res.ok) throw new Error("Routine request failed");
-      const json=await res.json(); setData(json); await setCachedRoutine(json,key); setOffline(false);
-    } catch { setOffline(true); if(!cached) setData({entries:[],version:null,versions:[]}); }
-    finally { setLoading(false); }
+      const json=await res.json();
+      setData(json);
+      await setCachedRoutine(json,key);
+      setOffline(false);
+    } catch {
+      setOffline(!navigator.onLine);
+      if(!cached) setData({entries:[],version:null,versions:[]});
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(()=>{
     fetchRoutine();
-    const onOnline=()=>fetchRoutine(); const onOffline=()=>setOffline(true);
-    window.addEventListener("online",onOnline); window.addEventListener("offline",onOffline);
-    return ()=>{ window.removeEventListener("online",onOnline); window.removeEventListener("offline",onOffline); };
+    // Reconnecting must NOT trigger another API request. The full routine is
+    // already on-device; users can use the refresh button when they want to sync.
+    const onOnline=()=>setOffline(false);
+    const onOffline=()=>setOffline(true);
+    window.addEventListener("online",onOnline);
+    window.addEventListener("offline",onOffline);
+    return ()=>{
+      window.removeEventListener("online",onOnline);
+      window.removeEventListener("offline",onOffline);
+    };
   },[]);
 
   const entries=data.entries;
@@ -178,7 +216,7 @@ export default function PublicRoutineApp() {
               <h1 className="mt-4">Your routine, minus the clutter.</h1>
               <p>Find classes by section, teacher, or room in seconds. Switch between a focused day view and a full week overview.</p>
             </div>
-            <div className="mt-6 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-white/65"><span className="meta-pill">{data.version?.name || "Loading latest routine"}</span><span className="meta-pill">{offline ? <><WifiOff size={13}/> Offline cache</> : <><CheckCircle2 size={13}/> Live & cached</>}</span></div>
+            <div className="mt-6 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-white/65"><span className="meta-pill">{data.version?.name || "Loading latest routine"}</span><span className="meta-pill">{offline ? <><WifiOff size={13}/> Offline · on device</> : <><CheckCircle2 size={13}/> Cached on device</>}</span></div>
           </div>
 
           <div className="search-panel">

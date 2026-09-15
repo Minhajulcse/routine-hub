@@ -1,4 +1,4 @@
-const CACHE_VERSION = "routine-hub-v26";
+const CACHE_VERSION = "routine-hub-v27";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const PAGE_CACHE = `${CACHE_VERSION}-pages`;
 const DATA_CACHE = `${CACHE_VERSION}-data`;
