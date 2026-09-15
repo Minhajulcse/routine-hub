@@ -1,0 +1,1 @@
+V23 build fix: removed an unreachable mode === "teacher" comparison inside the narrowed result useMemo. Teacher and room modes already return their dedicated sorted arrays before that block; student/empty modes now use the normal days order. This fixes Vercel TypeScript error TS2367 in components/PublicRoutineApp.tsx.

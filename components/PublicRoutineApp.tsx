@@ -120,7 +120,7 @@ export default function PublicRoutineApp() {
     if(mode==="student") filtered=entries.filter(e=>baseSection(sectionOf(e.courseSection))===baseSection(normalized));
     else if(mode==="teacher") return teacherWeekEntries;
     else if(mode==="room") return roomWeekEntries;
-    const sortDays = mode === "teacher" ? teacherDays : days;
+    const sortDays = days;
     return mergeConsecutiveLabEntries([...filtered].sort((a,b)=>{
       const dayA=(sortDays.indexOf(a.day.trim())>=0?sortDays.indexOf(a.day.trim()):Number.MAX_SAFE_INTEGER);
       const dayB=(sortDays.indexOf(b.day.trim())>=0?sortDays.indexOf(b.day.trim()):Number.MAX_SAFE_INTEGER);
