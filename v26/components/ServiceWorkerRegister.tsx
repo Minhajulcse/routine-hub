@@ -2,14 +2,11 @@
 
 import { useEffect } from "react";
 
-/**
- * Registers the offline app shell. The service worker uses versioned caches,
- * so new deployments replace old cached assets instead of serving stale chunks.
- */
 export default function ServiceWorkerRegister() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 
+    let cancelled = false;
     (async () => {
       try {
         const registration = await navigator.serviceWorker.register("/sw.js", {
@@ -17,6 +14,7 @@ export default function ServiceWorkerRegister() {
           updateViaCache: "none",
         });
 
+        if (cancelled) return;
         await registration.update();
 
         if (registration.waiting) {
@@ -32,11 +30,13 @@ export default function ServiceWorkerRegister() {
           });
         });
       } catch {
-        // Offline support is progressive; the app remains usable online.
+        // Keep the online app usable even when service-worker registration is unavailable.
       }
     })();
 
-    return () => {};
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return null;
